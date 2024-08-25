@@ -1,76 +1,92 @@
 package com.example.chatapplication
 
-import android.accessibilityservice.GestureDescription.StrokeDescription
 import android.content.Intent
-import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ktx.database
-import com.google.firebase.ktx.Firebase
 
 class Signup : AppCompatActivity() {
-    private lateinit var name:EditText
+    private lateinit var name: EditText
     private lateinit var Username: EditText
-    private lateinit var Password:EditText
+    private lateinit var Password: EditText
     private lateinit var Signup_Button: Button
     private lateinit var mAuth: FirebaseAuth
-    private lateinit var mDbRef : DatabaseReference
-    override fun onCreate(savedInstanceState: Bundle?) {
+    private lateinit var mDbRef: DatabaseReference
 
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_signup)
 
+        // Initialize Firebase Authentication
         mAuth = FirebaseAuth.getInstance()
+
+        // Initialize UI elements
         name = findViewById(R.id.name)
         Username = findViewById(R.id.email)
         Password = findViewById(R.id.setpassword)
         Signup_Button = findViewById(R.id.signup_button)
 
         Signup_Button.setOnClickListener {
-        Signup_Button.setOnClickListener {
-            val name_edt = name.text.toString()
-            val email = Username.text.toString()
-            val password = Password.text.toString()
+            val nameText = name.text.toString().trim()
+            val email = Username.text.toString().trim()
+            val password = Password.text.toString().trim()
 
-            signup(name_edt,email,password)
+            if (nameText.isNotEmpty() && email.isNotEmpty() && password.isNotEmpty()) {
+                signup(nameText, email, password)
+            } else {
+                Toast.makeText(this, "Please fill in all fields.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
-}
 
-    private fun signup(User_name:String,email: String, password: String) {
-        //logic for create a new user
+    private fun signup(name: String, email: String, password: String) {
         mAuth.createUserWithEmailAndPassword(email, password)
             .addOnCompleteListener(this) { task ->
                 if (task.isSuccessful) {
-                    addUserToDatabase(User_name,email, mAuth.currentUser?.uid!!)
-                    // Sign in success, update UI with the signed-in user's information
-                    val intent = Intent(this@Signup,MainActivity::class.java)
-                    startActivity(intent)
-                    finish()
+                    val uid = mAuth.currentUser?.uid
+                    if (uid != null) {
+                        addUserToDatabase(name, email, uid)
+                        val intent = Intent(this@Signup, MainActivity::class.java)
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        Log.e("Signup", "User ID is null after signup.")
+                    }
                 } else {
-                    // If sign in fails, display a message to the user.
+                    Log.e("Signup", "Authentication failed.", task.exception)
                     Toast.makeText(
                         baseContext,
-                        "Authentication failed.",
-                        Toast.LENGTH_SHORT,
+                        "Authentication failed: ${task.exception?.message}",
+                        Toast.LENGTH_LONG,
                     ).show()
                 }
             }
-
     }
 
-    private fun addUserToDatabase(name: String, email: String, uid: String?) {
-        mDbRef = FirebaseDatabase.getInstance().getReference()
+    private fun addUserToDatabase(name: String, email: String, uid: String) {
+        val user = User(Name = name, email = email, uid = uid)
+        val currentUser = mAuth.currentUser
 
-        if (uid != null) {
-            mDbRef.child("user").child(uid).setValue(User(name , email , uid))
+        if (currentUser != null) {
+            mDbRef = FirebaseDatabase.getInstance().getReference("users")
+            mDbRef.child(uid).setValue(user)
+                .addOnCompleteListener { task ->
+                    if (task.isSuccessful) {
+                        Log.d("Signup", "User data saved successfully.")
+                    } else {
+                        Log.e("Signup", "Failed to save user data.", task.exception)
+                        Toast.makeText(this, "Failed to save user data: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                    }
+                }
+        } else {
+            Log.e("Signup", "User is not authenticated.")
+            Toast.makeText(this, "User is not authenticated. Cannot save data.", Toast.LENGTH_LONG).show()
         }
     }
-
-
 }

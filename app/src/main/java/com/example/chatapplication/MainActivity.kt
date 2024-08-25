@@ -3,62 +3,75 @@ package com.example.chatapplication
 import android.content.Intent
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
+import android.util.Log
 import android.widget.ImageButton
-import android.widget.LinearLayout
 import androidx.appcompat.widget.Toolbar
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.DataSnapshot
-import com.google.firebase.database.DatabaseError
-import com.google.firebase.database.DatabaseReference
-import com.google.firebase.database.FirebaseDatabase
-import com.google.firebase.database.ValueEventListener
-import com.google.firebase.ktx.Firebase
+import com.google.firebase.database.*
 
 class MainActivity : AppCompatActivity() {
+
     private lateinit var userRecycler: RecyclerView
     private lateinit var userList: ArrayList<User>
     private lateinit var adapter: UserAdapter
     private lateinit var mAuth: FirebaseAuth
     private lateinit var mdRef: DatabaseReference
-    private lateinit var logoutbutton: ImageButton
+    private lateinit var logoutButton: ImageButton
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
-        userList = ArrayList()
-        val toolbar: Toolbar = findViewById(R.id.toolbar)
-        toolbar.title = "Health Connect"
-        setSupportActionBar(toolbar)
-        logoutbutton = findViewById(R.id.logout_Button)
-        adapter = UserAdapter(userList, this)
-        mdRef = FirebaseDatabase.getInstance().getReference()
+
+        // Initialize Firebase Authentication and Database references
         mAuth = FirebaseAuth.getInstance()
+        mdRef = FirebaseDatabase.getInstance().getReference("users") // Reference to "users" node
+
+        // Initialize UI elements
+        userList = ArrayList()
+        adapter = UserAdapter(userList, this)
+
         userRecycler = findViewById(R.id.userRecyclerview)
         userRecycler.layoutManager = LinearLayoutManager(this)
         userRecycler.adapter = adapter
-        logoutbutton.setOnClickListener {
+
+        val toolbar: Toolbar = findViewById(R.id.toolbar)
+        toolbar.title = "Health Connect"
+        setSupportActionBar(toolbar)
+
+        logoutButton = findViewById(R.id.logout_Button)
+        logoutButton.setOnClickListener {
             mAuth.signOut()
-            val intent_new = Intent(this@MainActivity, Login::class.java)
-            startActivity(intent_new)
+            val intentNew = Intent(this@MainActivity, Login::class.java)
+            startActivity(intentNew)
             finish()
         }
-        mdRef.child("user").addValueEventListener(object : ValueEventListener {
+
+        // Fetch users from the database
+        fetchUsers()
+    }
+
+    private fun fetchUsers() {
+        mdRef.addValueEventListener(object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
-                userList.clear()
-                for (postsnapshot in snapshot.children) {
-                    val currentUser = postsnapshot.getValue(User::class.java)
-                    if (mAuth.currentUser?.uid != currentUser?.uid) {
-                        userList.add(currentUser!!)
+                userList.clear()  // Clear the list before adding new data
+                val currentUserUid = mAuth.currentUser?.uid
+
+                for (postSnapshot in snapshot.children) {
+                    val user = postSnapshot.getValue(User::class.java)
+                    // Add user to the list if it's not the current logged-in user
+                    if (user != null && user.uid != currentUserUid) {
+                        userList.add(user)
                     }
                 }
-                adapter.notifyDataSetChanged()
+                adapter.notifyDataSetChanged()  // Notify the adapter to refresh the RecyclerView
             }
 
             override fun onCancelled(error: DatabaseError) {
-
+                // Log error if data retrieval fails
+                Log.e("MainActivity", "Error fetching users", error.toException())
             }
-
         })
     }
 }
